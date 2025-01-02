@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Chat UI with Bootstrap</title>
+    <meta charset="UTF-8" />
+    <link
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      #chat-box {
+        height: 350px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+      }
+
+      .my-message {
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row justify-content-center mt-5">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body" id="chat-box">
+              <p class="other-message">안녕하세요!</p>
+              <p class="other-message">간단한 채팅 UI 테스트 중입니다.</p>
+            </div>
+            <div class="card-footer">
+              <input
+                type="text"
+                id="message-input"
+                class="form-control"
+                placeholder="메시지를 입력하세요"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let CHANNEL_ID = null;
+      const API_URL = "http://localhost:7071";
+      // const API_URL = "https://jychoi-chatgpt-test.azurewebsites.net";
+
+      function getChannelId() {
+        return $.ajax({
+          url: `${API_URL}/channel_id`,
+          type: "GET",
+          dataType: "json",
+        });
+      }
+      function getPubSubToken(channelId) {
+        return $.ajax({
+          url: `${API_URL}/pubsub/token?channel_id=${channelId}`,
+          type: "GET",
+          dataType: "json",
+        });
+      }
+      function connectWebSocket(channelId, token) {
+        const WEB_SOCKET_URL = `wss://my-gpt-app-test-jychoi.webpubsub.azure.com/client/hubs/dev_hub?access_token=${token}`;
+        const pubsubClient = new WebSocket(
+          WEB_SOCKET_URL,
+          "json.webpubsub.azure.v1"
+        );
+
+        pubsubClient.onopen = function () {
+          console.log("Connected to the server");
+          pubsubClient.send(
+            JSON.stringify({
+              type: "joinGroup",
+              group: channelId,
+            })
+          );
+        };
+
+        pubsubClient.onmessage = function (event) {
+          const message = JSON.parse(event.data);
+          if (message?.data?.content) {
+            console.log(message?.data);
+
+            $("#chat-box").append(
+              '<p class="other-message">' + message.data.content + "</p>"
+            );
+            // $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+          }
+        };
+      }
+
+      $(document).ready(function () {
+        getChannelId()
+          .then((res) => {
+            CHANNEL_ID = res.channel_id;
+            console.log("Channel ID: ", CHANNEL_ID);
+            return getPubSubToken(CHANNEL_ID);
+          })
+          .then((res) => {
+            connectWebSocket(CHANNEL_ID, res.token);
+          });
+
+        $("#message-input").keydown(function (event) {
+          if (event.isComposing || event.keyCode === 229) {
+            return;
+          }
+          if (event.key === "Enter") {
+            var message = $(this).val();
+            if (message.trim() !== "") {
+              $("#chat-box").append(
+                '<p class="my-message">' + message + "</p>"
+              );
+              // $(this).val("");
+              $(event.target).val("");
+              $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+
+              $.ajax({
+                url: `${API_URL}/question`,
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({
+                  channel_id: CHANNEL_ID,
+                  content: message,
+                }),
+                success: function (res) {},
+                error: function (err) {
+                  $("#chat-box").append(
+                    '<p class="my-message">' + "에러가 발생했습니다." + "</p>"
+                  );
+                },
+              });
+            }
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
