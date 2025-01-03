@@ -12,7 +12,7 @@ client = OpenAI()
 async def process_request(msg: func.ServiceBusMessage):
     message = json.loads(msg.get_body().decode('utf-8'))
     completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="o1",
         messages=[
             {"role": "system", "content": "질문에 대해 한국어로 대답해."},
             {
